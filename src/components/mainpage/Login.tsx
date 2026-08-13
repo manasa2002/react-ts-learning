@@ -10,7 +10,7 @@ export default function Login() {
         e.preventDefault()
 
         console.log({ email, password })
-        navigate('/')
+        navigate('/dashboard')
     }
 
     return (
