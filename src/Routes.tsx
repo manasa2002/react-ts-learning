@@ -5,6 +5,7 @@ import SignUp from "./components/mainpage/SignUp";
 import Dashboard from "./components/Appshell/Dashboard";
 import { HomePage } from "./components/mainpage/Homepage";
 import Projects from "./components/Appshell/Projects";
+import MyTasks from "./components/Appshell/MyTasks";
 
 
 export default function RoutesComponent() {
@@ -17,6 +18,7 @@ export default function RoutesComponent() {
                 <Route element={<AppShell />} >
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/projects" element={<Projects />} />
+                    <Route path="/tasks" element={<MyTasks />} />
                 </Route>
             </Routes>
         </BrowserRouter>

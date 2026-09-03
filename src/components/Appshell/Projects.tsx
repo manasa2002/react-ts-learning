@@ -1,4 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 
 import {
     closestCorners,
@@ -22,18 +27,24 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import {
+    AlertTriangle,
     CalendarDays,
+    CheckCircle2,
+    Clock3,
     Edit3,
+    Filter,
     MoreHorizontal,
     Plus,
+    RotateCcw,
+    Search,
     Trash2,
     Users,
     X,
 } from "lucide-react";
 
-/* =========================
+/* =====================================================
    TYPES
-========================= */
+===================================================== */
 
 type TaskStatus = "todo" | "progress" | "done";
 
@@ -63,9 +74,9 @@ interface BoardColumnProps {
     onTaskClick: (task: Task) => void;
 }
 
-/* =========================
+/* =====================================================
    INITIAL DATA
-========================= */
+===================================================== */
 
 const initialTasks: Task[] = [
     {
@@ -160,9 +171,9 @@ const initialTasks: Task[] = [
     },
 ];
 
-/* =========================
+/* =====================================================
    COLUMNS
-========================= */
+===================================================== */
 
 const columns: {
     id: TaskStatus;
@@ -182,17 +193,26 @@ const columns: {
         },
     ];
 
-/* =========================
+/* =====================================================
    MAIN COMPONENT
-========================= */
+===================================================== */
 
 function Projects() {
+    /* =========================
+       TASK STATE
+    ========================= */
+
     const [tasks, setTasks] = useState<Task[]>(() => {
-        const savedTasks = localStorage.getItem("trackly-tasks");
+        const savedTasks =
+            localStorage.getItem(
+                "trackly-tasks",
+            );
 
         if (savedTasks) {
             try {
-                return JSON.parse(savedTasks);
+                return JSON.parse(
+                    savedTasks,
+                );
             } catch {
                 return initialTasks;
             }
@@ -200,6 +220,10 @@ function Projects() {
 
         return initialTasks;
     });
+
+    /* =========================
+       MODAL STATE
+    ========================= */
 
     const [activeTask, setActiveTask] =
         useState<Task | null>(null);
@@ -213,24 +237,53 @@ function Projects() {
     const [editingTaskId, setEditingTaskId] =
         useState<number | null>(null);
 
-    /* FORM STATES */
+    /* =========================
+       FILTER STATE
+    ========================= */
+
+    const [searchQuery, setSearchQuery] =
+        useState("");
+
+    const [statusFilter, setStatusFilter] =
+        useState<"all" | TaskStatus>(
+            "all",
+        );
+
+    const [
+        priorityFilter,
+        setPriorityFilter,
+    ] = useState<
+        "all" | TaskPriority
+    >("all");
+
+    /* =========================
+       FORM STATE
+    ========================= */
 
     const [taskTitle, setTaskTitle] =
         useState("");
 
-    const [taskDescription, setTaskDescription] =
-        useState("");
+    const [
+        taskDescription,
+        setTaskDescription,
+    ] = useState("");
 
     const [taskStatus, setTaskStatus] =
         useState<TaskStatus>("todo");
 
-    const [taskPriority, setTaskPriority] =
-        useState<TaskPriority>("medium");
+    const [
+        taskPriority,
+        setTaskPriority,
+    ] = useState<TaskPriority>(
+        "medium",
+    );
 
     const [taskDueDate, setTaskDueDate] =
         useState("");
 
-    /* DRAG SENSOR */
+    /* =========================
+       DRAG SENSOR
+    ========================= */
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -251,9 +304,111 @@ function Projects() {
         );
     }, [tasks]);
 
-    /* =========================
+    /* =====================================================
+       FILTERED TASKS
+    ===================================================== */
+
+    const filteredTasks = useMemo(() => {
+        return tasks.filter((task) => {
+            const searchMatches =
+                task.title
+                    .toLowerCase()
+                    .includes(
+                        searchQuery.toLowerCase(),
+                    ) ||
+                task.description
+                    .toLowerCase()
+                    .includes(
+                        searchQuery.toLowerCase(),
+                    );
+
+            const statusMatches =
+                statusFilter === "all" ||
+                task.status === statusFilter;
+
+            const priorityMatches =
+                priorityFilter === "all" ||
+                task.priority ===
+                priorityFilter;
+
+            return (
+                searchMatches &&
+                statusMatches &&
+                priorityMatches
+            );
+        });
+    }, [
+        tasks,
+        searchQuery,
+        statusFilter,
+        priorityFilter,
+    ]);
+
+    /* =====================================================
+       TASK STATISTICS
+    ===================================================== */
+
+    const statistics = useMemo(() => {
+        const total = tasks.length;
+
+        const todo = tasks.filter(
+            (task) =>
+                task.status === "todo",
+        ).length;
+
+        const progress = tasks.filter(
+            (task) =>
+                task.status === "progress",
+        ).length;
+
+        const done = tasks.filter(
+            (task) =>
+                task.status === "done",
+        ).length;
+
+        const overdue = tasks.filter(
+            (task) => {
+                if (
+                    !task.dueDate ||
+                    task.status === "done"
+                ) {
+                    return false;
+                }
+
+                return (
+                    new Date(task.dueDate) <
+                    new Date()
+                );
+            },
+        ).length;
+
+        return {
+            total,
+            todo,
+            progress,
+            done,
+            overdue,
+        };
+    }, [tasks]);
+
+    /* =====================================================
+       CLEAR FILTERS
+    ===================================================== */
+
+    function clearFilters() {
+        setSearchQuery("");
+        setStatusFilter("all");
+        setPriorityFilter("all");
+    }
+
+    const hasActiveFilters =
+        searchQuery !== "" ||
+        statusFilter !== "all" ||
+        priorityFilter !== "all";
+
+    /* =====================================================
        OPEN CREATE MODAL
-    ========================= */
+    ===================================================== */
 
     function openAddTaskModal(
         status: TaskStatus = "todo",
@@ -270,17 +425,21 @@ function Projects() {
         setIsModalOpen(true);
     }
 
-    /* =========================
+    /* =====================================================
        OPEN EDIT MODAL
-    ========================= */
+    ===================================================== */
 
-    function openEditTaskModal(task: Task) {
+    function openEditTaskModal(
+        task: Task,
+    ) {
         setSelectedTask(null);
 
         setEditingTaskId(task.id);
 
         setTaskTitle(task.title);
-        setTaskDescription(task.description);
+        setTaskDescription(
+            task.description,
+        );
         setTaskStatus(task.status);
         setTaskPriority(task.priority);
         setTaskDueDate(task.dueDate);
@@ -288,77 +447,100 @@ function Projects() {
         setIsModalOpen(true);
     }
 
-    /* =========================
+    /* =====================================================
        CREATE / UPDATE TASK
-    ========================= */
+    ===================================================== */
 
     function handleSaveTask() {
         if (!taskTitle.trim()) return;
 
-        if (editingTaskId !== null) {
-            setTasks((previousTasks) =>
-                previousTasks.map((task) =>
-                    task.id === editingTaskId
-                        ? {
-                            ...task,
-                            title: taskTitle.trim(),
-                            description: taskDescription.trim(),
-                            status: taskStatus,
-                            priority: taskPriority,
-                            dueDate: taskDueDate,
-                        }
-                        : task,
-                ),
+        if (
+            editingTaskId !== null
+        ) {
+            setTasks(
+                (previousTasks) =>
+                    previousTasks.map(
+                        (task) =>
+                            task.id ===
+                                editingTaskId
+                                ? {
+                                    ...task,
+                                    title:
+                                        taskTitle.trim(),
+                                    description:
+                                        taskDescription.trim(),
+                                    status:
+                                        taskStatus,
+                                    priority:
+                                        taskPriority,
+                                    dueDate:
+                                        taskDueDate,
+                                }
+                                : task,
+                    ),
             );
         } else {
             const newTask: Task = {
                 id: Date.now(),
                 title: taskTitle.trim(),
-                description: taskDescription.trim(),
+                description:
+                    taskDescription.trim(),
                 status: taskStatus,
                 priority: taskPriority,
                 assignee: "M",
                 dueDate: taskDueDate,
             };
 
-            setTasks((previousTasks) => [
-                ...previousTasks,
-                newTask,
-            ]);
+            setTasks(
+                (previousTasks) => [
+                    ...previousTasks,
+                    newTask,
+                ],
+            );
         }
 
         setIsModalOpen(false);
     }
 
-    /* =========================
+    /* =====================================================
        DELETE TASK
-    ========================= */
+    ===================================================== */
 
-    function handleDeleteTask(taskId: number) {
-        const shouldDelete = window.confirm(
-            "Are you sure you want to delete this task?",
-        );
+    function handleDeleteTask(
+        taskId: number,
+    ) {
+        const shouldDelete =
+            window.confirm(
+                "Are you sure you want to delete this task?",
+            );
 
         if (!shouldDelete) return;
 
-        setTasks((previousTasks) =>
-            previousTasks.filter(
-                (task) => task.id !== taskId,
-            ),
+        setTasks(
+            (previousTasks) =>
+                previousTasks.filter(
+                    (task) =>
+                        task.id !== taskId,
+                ),
         );
 
         setSelectedTask(null);
     }
 
-    /* =========================
+    /* =====================================================
        DRAG START
-    ========================= */
+    ===================================================== */
 
-    function handleDragStart(event: DragStartEvent) {
-        const taskId = Number(event.active.id);
+    function handleDragStart(
+        event: DragStartEvent,
+    ) {
+        const taskId = Number(
+            event.active.id,
+        );
 
         const task = tasks.find(
-            (item) => item.id === taskId,
+            (item) =>
+                item.id === taskId,
         );
 
         if (task) {
@@ -366,169 +548,197 @@ function Projects() {
         }
     }
 
-    /* =========================
-       DRAG END + SORTING
-    ========================= */
+    /* =====================================================
+       DRAG END
+       + SAME COLUMN SORTING
+       + CROSS COLUMN MOVEMENT
+    ===================================================== */
 
-    function handleDragEnd(event: DragEndEvent) {
-        const { active, over } = event;
+    function handleDragEnd(
+        event: DragEndEvent,
+    ) {
+        const { active, over } =
+            event;
 
         setActiveTask(null);
 
         if (!over) return;
 
-        const activeId = Number(active.id);
+        const activeId = Number(
+            active.id,
+        );
+
         const overId = over.id;
 
         const activeTask = tasks.find(
-            (task) => task.id === activeId,
+            (task) =>
+                task.id === activeId,
         );
 
         if (!activeTask) return;
 
         /* =========================
-           CASE 1:
            DROPPED ON COLUMN
         ========================= */
 
-        const targetColumn = columns.find(
-            (column) => column.id === overId,
-        );
+        const targetColumn =
+            columns.find(
+                (column) =>
+                    column.id === overId,
+            );
 
         if (targetColumn) {
-            setTasks((previousTasks) => {
-                const activeIndex =
-                    previousTasks.findIndex(
-                        (task) => task.id === activeId,
+            setTasks(
+                (previousTasks) => {
+                    const activeIndex =
+                        previousTasks.findIndex(
+                            (task) =>
+                                task.id ===
+                                activeId,
+                        );
+
+                    if (
+                        activeIndex === -1
+                    ) {
+                        return previousTasks;
+                    }
+
+                    const updatedTasks = [
+                        ...previousTasks,
+                    ];
+
+                    const movedTask = {
+                        ...updatedTasks[
+                        activeIndex
+                        ],
+                        status:
+                            targetColumn.id,
+                    };
+
+                    updatedTasks.splice(
+                        activeIndex,
+                        1,
                     );
 
-                if (activeIndex === -1) {
-                    return previousTasks;
-                }
+                    let insertIndex =
+                        updatedTasks.length;
 
-                const updatedTasks = [
-                    ...previousTasks,
-                ];
-
-                const movedTask = {
-                    ...updatedTasks[activeIndex],
-                    status: targetColumn.id,
-                };
-
-                updatedTasks.splice(
-                    activeIndex,
-                    1,
-                );
-
-                /*
-                  Find the last task
-                  belonging to the target column
-                */
-
-                let insertIndex =
-                    updatedTasks.length;
-
-                for (
-                    let i = updatedTasks.length - 1;
-                    i >= 0;
-                    i--
-                ) {
-                    if (
-                        updatedTasks[i].status ===
-                        targetColumn.id
+                    for (
+                        let i =
+                            updatedTasks.length -
+                            1;
+                        i >= 0;
+                        i--
                     ) {
-                        insertIndex = i + 1;
-                        break;
+                        if (
+                            updatedTasks[i]
+                                .status ===
+                            targetColumn.id
+                        ) {
+                            insertIndex =
+                                i + 1;
+                            break;
+                        }
                     }
-                }
 
-                updatedTasks.splice(
-                    insertIndex,
-                    0,
-                    movedTask,
-                );
+                    updatedTasks.splice(
+                        insertIndex,
+                        0,
+                        movedTask,
+                    );
 
-                return updatedTasks;
-            });
+                    return updatedTasks;
+                },
+            );
 
             return;
         }
 
         /* =========================
-           CASE 2:
-           DROPPED ON ANOTHER TASK
+           DROPPED ON TASK
         ========================= */
 
-        const overTaskId = Number(overId);
+        const overTaskId =
+            Number(overId);
 
-        const overTask = tasks.find(
-            (task) => task.id === overTaskId,
-        );
+        const overTask =
+            tasks.find(
+                (task) =>
+                    task.id ===
+                    overTaskId,
+            );
 
         if (!overTask) return;
 
-        setTasks((previousTasks) => {
-            const oldIndex =
-                previousTasks.findIndex(
-                    (task) => task.id === activeId,
-                );
+        setTasks(
+            (previousTasks) => {
+                const oldIndex =
+                    previousTasks.findIndex(
+                        (task) =>
+                            task.id ===
+                            activeId,
+                    );
 
-            const newIndex =
-                previousTasks.findIndex(
-                    (task) => task.id === overTaskId,
-                );
+                const newIndex =
+                    previousTasks.findIndex(
+                        (task) =>
+                            task.id ===
+                            overTaskId,
+                    );
 
-            if (
-                oldIndex === -1 ||
-                newIndex === -1
-            ) {
-                return previousTasks;
-            }
+                if (
+                    oldIndex === -1 ||
+                    newIndex === -1
+                ) {
+                    return previousTasks;
+                }
 
-            /*
-              SAME COLUMN
-              → REORDER
-            */
+                /* SAME COLUMN */
 
-            if (
-                activeTask.status ===
-                overTask.status
-            ) {
+                if (
+                    activeTask.status ===
+                    overTask.status
+                ) {
+                    return arrayMove(
+                        previousTasks,
+                        oldIndex,
+                        newIndex,
+                    );
+                }
+
+                /* DIFFERENT COLUMN */
+
+                const updatedTasks = [
+                    ...previousTasks,
+                ];
+
+                updatedTasks[
+                    oldIndex
+                ] = {
+                    ...updatedTasks[
+                    oldIndex
+                    ],
+                    status:
+                        overTask.status,
+                };
+
                 return arrayMove(
-                    previousTasks,
+                    updatedTasks,
                     oldIndex,
                     newIndex,
                 );
-            }
-
-            /*
-              DIFFERENT COLUMN
-              → CHANGE STATUS
-              → MOVE NEAR TARGET TASK
-            */
-
-            const updatedTasks = [
-                ...previousTasks,
-            ];
-
-            updatedTasks[oldIndex] = {
-                ...updatedTasks[oldIndex],
-                status: overTask.status,
-            };
-
-            return arrayMove(
-                updatedTasks,
-                oldIndex,
-                newIndex,
-            );
-        });
+            },
+        );
     }
+
+    /* =====================================================
+       JSX
+    ===================================================== */
 
     return (
         <div className="mx-auto max-w-[1400px]">
-            {/* =========================
-          PROJECT HEADER
-      ========================= */}
+
+            {/* HEADER */}
 
             <section className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
                 <div>
@@ -567,66 +777,240 @@ function Projects() {
                 </button>
             </section>
 
-            {/* =========================
-          PROJECT INFO
-      ========================= */}
+            {/* =================================================
+          STATISTICS
+      ================================================= */}
 
-            <section className="mb-7 grid gap-4 sm:grid-cols-3">
+            <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <ProjectInfo
-                    icon={<Users size={17} />}
-                    label="Team Members"
-                    value="3 members"
-                />
-
-                <ProjectInfo
-                    icon={<CalendarDays size={17} />}
-                    label="Due Date"
-                    value="September 15, 2026"
-                />
-
-                <ProjectInfo
-                    icon={<MoreHorizontal size={17} />}
+                    icon={
+                        <MoreHorizontal
+                            size={17}
+                        />
+                    }
                     label="Total Tasks"
-                    value={`${tasks.length} tasks`}
+                    value={`${statistics.total}`}
+                />
+
+                <ProjectInfo
+                    icon={
+                        <Clock3 size={17} />
+                    }
+                    label="To Do"
+                    value={`${statistics.todo}`}
+                />
+
+                <ProjectInfo
+                    icon={
+                        <Filter size={17} />
+                    }
+                    label="In Progress"
+                    value={`${statistics.progress}`}
+                />
+
+                <ProjectInfo
+                    icon={
+                        <CheckCircle2
+                            size={17}
+                        />
+                    }
+                    label="Completed"
+                    value={`${statistics.done}`}
+                />
+
+                <ProjectInfo
+                    icon={
+                        <AlertTriangle
+                            size={17}
+                        />
+                    }
+                    label="Overdue"
+                    value={`${statistics.overdue}`}
                 />
             </section>
 
-            {/* =========================
+            {/* =================================================
+          SEARCH + FILTERS
+      ================================================= */}
+
+            <section className="mb-7 rounded-2xl border border-[#e1e7e5] bg-[#f9faf9] p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+
+                    {/* SEARCH */}
+
+                    <div className="relative flex-1">
+                        <Search
+                            size={17}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8a9b9b]"
+                        />
+
+                        <input
+                            value={searchQuery}
+                            onChange={(
+                                event,
+                            ) =>
+                                setSearchQuery(
+                                    event.target.value,
+                                )
+                            }
+                            placeholder="Search tasks..."
+                            className="w-full rounded-xl border border-[#dce4e2] bg-white py-2.5 pl-10 pr-4 text-sm text-[#29494a] outline-none placeholder:text-[#a7b3b3] focus:border-[#527273]"
+                        />
+                    </div>
+
+                    {/* STATUS FILTER */}
+
+                    <select
+                        value={statusFilter}
+                        onChange={(
+                            event,
+                        ) =>
+                            setStatusFilter(
+                                event.target
+                                    .value as
+                                | "all"
+                                | TaskStatus,
+                            )
+                        }
+                        className="rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#527273] outline-none focus:border-[#527273]"
+                    >
+                        <option value="all">
+                            All Status
+                        </option>
+
+                        <option value="todo">
+                            To Do
+                        </option>
+
+                        <option value="progress">
+                            In Progress
+                        </option>
+
+                        <option value="done">
+                            Done
+                        </option>
+                    </select>
+
+                    {/* PRIORITY FILTER */}
+
+                    <select
+                        value={priorityFilter}
+                        onChange={(
+                            event,
+                        ) =>
+                            setPriorityFilter(
+                                event.target
+                                    .value as
+                                | "all"
+                                | TaskPriority,
+                            )
+                        }
+                        className="rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#527273] outline-none focus:border-[#527273]"
+                    >
+                        <option value="all">
+                            All Priority
+                        </option>
+
+                        <option value="high">
+                            High
+                        </option>
+
+                        <option value="medium">
+                            Medium
+                        </option>
+
+                        <option value="low">
+                            Low
+                        </option>
+                    </select>
+
+                    {/* CLEAR */}
+
+                    {hasActiveFilters && (
+                        <button
+                            type="button"
+                            onClick={
+                                clearFilters
+                            }
+                            className="flex items-center justify-center gap-2 rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#718282] transition hover:bg-[#eef2f1]"
+                        >
+                            <RotateCcw
+                                size={16}
+                            />
+                            Clear
+                        </button>
+                    )}
+                </div>
+
+                {/* FILTER RESULT */}
+
+                {hasActiveFilters && (
+                    <p className="mt-3 text-xs text-[#849595]">
+                        Showing{" "}
+                        <span className="font-semibold text-[#527273]">
+                            {
+                                filteredTasks.length
+                            }
+                        </span>{" "}
+                        matching tasks.
+                    </p>
+                )}
+            </section>
+
+            {/* =================================================
           KANBAN BOARD
-      ========================= */}
+      ================================================= */}
 
             <DndContext
                 sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
+                collisionDetection={
+                    closestCorners
+                }
+                onDragStart={
+                    handleDragStart
+                }
+                onDragEnd={
+                    handleDragEnd
+                }
             >
                 <section className="grid gap-4 lg:grid-cols-3">
-                    {columns.map((column) => {
-                        const columnTasks =
-                            tasks.filter(
-                                (task) =>
-                                    task.status ===
-                                    column.id,
-                            );
-
-                        return (
-                            <BoardColumn
-                                key={column.id}
-                                id={column.id}
-                                title={column.title}
-                                tasks={columnTasks}
-                                onAddTask={() =>
-                                    openAddTaskModal(
+                    {columns.map(
+                        (column) => {
+                            const columnTasks =
+                                filteredTasks.filter(
+                                    (task) =>
+                                        task.status ===
                                         column.id,
-                                    )
-                                }
-                                onTaskClick={(task) =>
-                                    setSelectedTask(task)
-                                }
-                            />
-                        );
-                    })}
+                                );
+
+                            return (
+                                <BoardColumn
+                                    key={
+                                        column.id
+                                    }
+                                    id={column.id}
+                                    title={
+                                        column.title
+                                    }
+                                    tasks={
+                                        columnTasks
+                                    }
+                                    onAddTask={() =>
+                                        openAddTaskModal(
+                                            column.id,
+                                        )
+                                    }
+                                    onTaskClick={(
+                                        task,
+                                    ) =>
+                                        setSelectedTask(
+                                            task,
+                                        )
+                                    }
+                                />
+                            );
+                        },
+                    )}
                 </section>
 
                 {/* DRAG OVERLAY */}
@@ -634,7 +1018,9 @@ function Projects() {
                 <DragOverlay>
                     {activeTask ? (
                         <TaskCard
-                            task={activeTask}
+                            task={
+                                activeTask
+                            }
                             isDragging
                             onClick={() => { }}
                         />
@@ -642,15 +1028,17 @@ function Projects() {
                 </DragOverlay>
             </DndContext>
 
-            {/* =========================
+            {/* =================================================
           TASK DETAILS MODAL
-      ========================= */}
+      ================================================= */}
 
             {selectedTask && (
                 <TaskDetailsModal
                     task={selectedTask}
                     onClose={() =>
-                        setSelectedTask(null)
+                        setSelectedTask(
+                            null,
+                        )
                     }
                     onEdit={() =>
                         openEditTaskModal(
@@ -665,31 +1053,48 @@ function Projects() {
                 />
             )}
 
-            {/* =========================
-          CREATE / EDIT MODAL
-      ========================= */}
+            {/* =================================================
+          TASK FORM MODAL
+      ================================================= */}
 
             {isModalOpen && (
                 <TaskFormModal
                     isEditing={
-                        editingTaskId !== null
+                        editingTaskId !==
+                        null
                     }
-                    taskTitle={taskTitle}
+                    taskTitle={
+                        taskTitle
+                    }
                     taskDescription={
                         taskDescription
                     }
-                    taskStatus={taskStatus}
-                    taskPriority={taskPriority}
-                    taskDueDate={taskDueDate}
-                    onClose={() =>
-                        setIsModalOpen(false)
+                    taskStatus={
+                        taskStatus
                     }
-                    onSave={handleSaveTask}
-                    setTaskTitle={setTaskTitle}
+                    taskPriority={
+                        taskPriority
+                    }
+                    taskDueDate={
+                        taskDueDate
+                    }
+                    onClose={() =>
+                        setIsModalOpen(
+                            false,
+                        )
+                    }
+                    onSave={
+                        handleSaveTask
+                    }
+                    setTaskTitle={
+                        setTaskTitle
+                    }
                     setTaskDescription={
                         setTaskDescription
                     }
-                    setTaskStatus={setTaskStatus}
+                    setTaskStatus={
+                        setTaskStatus
+                    }
                     setTaskPriority={
                         setTaskPriority
                     }
@@ -702,9 +1107,9 @@ function Projects() {
     );
 }
 
-/* =========================
-   PROJECT INFO CARD
-========================= */
+/* =====================================================
+   PROJECT INFO
+===================================================== */
 
 function ProjectInfo({
     icon,
@@ -730,9 +1135,9 @@ function ProjectInfo({
     );
 }
 
-/* =========================
+/* =====================================================
    BOARD COLUMN
-========================= */
+===================================================== */
 
 function BoardColumn({
     id,
@@ -752,15 +1157,18 @@ function BoardColumn({
         <div
             ref={setNodeRef}
             className={`
-        min-h-[500px] rounded-2xl
-        border p-3 transition
+        min-h-[500px]
+        rounded-2xl
+        border
+        p-3
+        transition
         ${isOver
                     ? "border-[#527273] bg-[#e8f0ee]"
                     : "border-[#e1e7e5] bg-[#eef2f1]/60"
                 }
       `}
         >
-            {/* COLUMN HEADER */}
+            {/* HEADER */}
 
             <div className="mb-4 flex items-center justify-between px-2 pt-2">
                 <div className="flex items-center gap-2">
@@ -775,14 +1183,16 @@ function BoardColumn({
 
                 <button
                     type="button"
-                    onClick={onAddTask}
+                    onClick={
+                        onAddTask
+                    }
                     className="text-[#849595] transition hover:text-[#29494a]"
                 >
                     <Plus size={17} />
                 </button>
             </div>
 
-            {/* SORTABLE TASK LIST */}
+            {/* SORTABLE */}
 
             <SortableContext
                 items={tasks.map(
@@ -793,15 +1203,19 @@ function BoardColumn({
                 }
             >
                 <div className="space-y-3">
-                    {tasks.map((task) => (
-                        <SortableTask
-                            key={task.id}
-                            task={task}
-                            onClick={() =>
-                                onTaskClick(task)
-                            }
-                        />
-                    ))}
+                    {tasks.map(
+                        (task) => (
+                            <SortableTask
+                                key={task.id}
+                                task={task}
+                                onClick={() =>
+                                    onTaskClick(
+                                        task,
+                                    )
+                                }
+                            />
+                        ),
+                    )}
                 </div>
             </SortableContext>
 
@@ -809,7 +1223,9 @@ function BoardColumn({
 
             <button
                 type="button"
-                onClick={onAddTask}
+                onClick={
+                    onAddTask
+                }
                 className="mt-3 flex min-h-[80px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#cbd7d4] text-xs text-[#849595] transition hover:border-[#789b97] hover:bg-white/70"
             >
                 <Plus size={16} />
@@ -819,9 +1235,9 @@ function BoardColumn({
     );
 }
 
-/* =========================
+/* =====================================================
    SORTABLE TASK
-========================= */
+===================================================== */
 
 function SortableTask({
     task,
@@ -855,7 +1271,9 @@ function SortableTask({
             style={style}
             {...attributes}
             {...listeners}
-            onClick={onClick}
+            onClick={
+                onClick
+            }
             className={
                 isDragging
                     ? "opacity-30"
@@ -864,15 +1282,17 @@ function SortableTask({
         >
             <TaskCard
                 task={task}
-                onClick={onClick}
+                onClick={
+                    onClick
+                }
             />
         </div>
     );
 }
 
-/* =========================
+/* =====================================================
    TASK CARD
-========================= */
+===================================================== */
 
 function TaskCard({
     task,
@@ -884,20 +1304,27 @@ function TaskCard({
     onClick: () => void;
 }) {
     const priorityStyles = {
-        high: "bg-[#fbe0da] text-[#b85d4c]",
+        high:
+            "bg-[#fbe0da] text-[#b85d4c]",
         medium:
             "bg-[#f6edd1] text-[#a9842f]",
-        low: "bg-[#dceee8] text-[#4c8774]",
+        low:
+            "bg-[#dceee8] text-[#4c8774]",
     };
 
     return (
         <button
             type="button"
-            onClick={onClick}
+            onClick={
+                onClick
+            }
             className={`
-        w-full rounded-xl
+        w-full
+        rounded-xl
         border border-[#dde5e3]
-        bg-white p-4 text-left
+        bg-white
+        p-4
+        text-left
         shadow-[0_2px_8px_rgba(25,60,60,0.05)]
         transition
         ${isDragging
@@ -913,9 +1340,14 @@ function TaskCard({
 
                 <span
                     className={`
-            rounded-md px-2 py-1
-            text-[9px] font-medium
-            ${priorityStyles[task.priority]}
+            rounded-md
+            px-2 py-1
+            text-[9px]
+            font-medium
+            ${priorityStyles[
+                        task.priority
+                        ]
+                        }
           `}
                 >
                     {task.priority}
@@ -924,7 +1356,9 @@ function TaskCard({
 
             {task.description && (
                 <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#849595]">
-                    {task.description}
+                    {
+                        task.description
+                    }
                 </p>
             )}
 
@@ -935,16 +1369,18 @@ function TaskCard({
                 </span>
 
                 <div className="grid h-6 w-6 place-items-center rounded-full bg-[#dcebea] text-[9px] font-semibold text-[#527273]">
-                    {task.assignee}
+                    {
+                        task.assignee
+                    }
                 </div>
             </div>
         </button>
     );
 }
 
-/* =========================
+/* =====================================================
    TASK DETAILS MODAL
-========================= */
+===================================================== */
 
 function TaskDetailsModal({
     task,
@@ -961,8 +1397,6 @@ function TaskDetailsModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#163536]/30 p-4 backdrop-blur-sm">
             <div className="w-full max-w-lg rounded-2xl bg-[#f9faf9] p-6 shadow-2xl">
 
-                {/* HEADER */}
-
                 <div className="flex items-start justify-between">
                     <div>
                         <p className="text-xs text-[#849595]">
@@ -970,42 +1404,48 @@ function TaskDetailsModal({
                         </p>
 
                         <h2 className="mt-2 text-xl font-semibold text-[#29494a]">
-                            {task.title}
+                            {
+                                task.title
+                            }
                         </h2>
                     </div>
 
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={
+                            onClose
+                        }
                         className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#edf1f0]"
                     >
                         <X size={18} />
                     </button>
                 </div>
 
-                {/* DESCRIPTION */}
-
                 <p className="mt-6 text-sm leading-6 text-[#718282]">
                     {task.description ||
                         "No description added."}
                 </p>
 
-                {/* DETAILS */}
-
                 <div className="mt-7 grid grid-cols-2 gap-4">
                     <DetailItem
                         label="Status"
-                        value={task.status}
+                        value={
+                            task.status
+                        }
                     />
 
                     <DetailItem
                         label="Priority"
-                        value={task.priority}
+                        value={
+                            task.priority
+                        }
                     />
 
                     <DetailItem
                         label="Assignee"
-                        value={task.assignee}
+                        value={
+                            task.assignee
+                        }
                     />
 
                     <DetailItem
@@ -1017,24 +1457,30 @@ function TaskDetailsModal({
                     />
                 </div>
 
-                {/* ACTIONS */}
-
                 <div className="mt-8 flex justify-between">
                     <button
                         type="button"
-                        onClick={onDelete}
+                        onClick={
+                            onDelete
+                        }
                         className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-[#c65b50] transition hover:bg-[#fdebea]"
                     >
-                        <Trash2 size={16} />
+                        <Trash2
+                            size={16}
+                        />
                         Delete
                     </button>
 
                     <button
                         type="button"
-                        onClick={onEdit}
+                        onClick={
+                            onEdit
+                        }
                         className="flex items-center gap-2 rounded-lg bg-[#214f51] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
                     >
-                        <Edit3 size={16} />
+                        <Edit3
+                            size={16}
+                        />
                         Edit task
                     </button>
                 </div>
@@ -1043,9 +1489,9 @@ function TaskDetailsModal({
     );
 }
 
-/* =========================
+/* =====================================================
    DETAIL ITEM
-========================= */
+===================================================== */
 
 function DetailItem({
     label,
@@ -1067,9 +1513,9 @@ function DetailItem({
     );
 }
 
-/* =========================
-   CREATE / EDIT TASK MODAL
-========================= */
+/* =====================================================
+   TASK FORM MODAL
+===================================================== */
 
 function TaskFormModal({
     isEditing,
@@ -1114,8 +1560,6 @@ function TaskFormModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#163536]/30 p-4 backdrop-blur-sm">
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#f9faf9] p-6 shadow-2xl">
 
-                {/* HEADER */}
-
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-semibold text-[#29494a]">
@@ -1131,7 +1575,9 @@ function TaskFormModal({
 
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={
+                            onClose
+                        }
                         className="grid h-9 w-9 place-items-center rounded-lg transition hover:bg-[#edf1f0]"
                     >
                         <X size={18} />
@@ -1147,10 +1593,15 @@ function TaskFormModal({
 
                     <input
                         autoFocus
-                        value={taskTitle}
-                        onChange={(event) =>
+                        value={
+                            taskTitle
+                        }
+                        onChange={(
+                            event,
+                        ) =>
                             setTaskTitle(
-                                event.target.value,
+                                event.target
+                                    .value,
                             )
                         }
                         placeholder="What needs to be done?"
@@ -1166,10 +1617,15 @@ function TaskFormModal({
                     </label>
 
                     <textarea
-                        value={taskDescription}
-                        onChange={(event) =>
+                        value={
+                            taskDescription
+                        }
+                        onChange={(
+                            event,
+                        ) =>
                             setTaskDescription(
-                                event.target.value,
+                                event.target
+                                    .value,
                             )
                         }
                         rows={4}
@@ -1187,8 +1643,12 @@ function TaskFormModal({
                         </label>
 
                         <select
-                            value={taskStatus}
-                            onChange={(event) =>
+                            value={
+                                taskStatus
+                            }
+                            onChange={(
+                                event,
+                            ) =>
                                 setTaskStatus(
                                     event.target
                                         .value as TaskStatus,
@@ -1216,8 +1676,12 @@ function TaskFormModal({
                         </label>
 
                         <select
-                            value={taskPriority}
-                            onChange={(event) =>
+                            value={
+                                taskPriority
+                            }
+                            onChange={(
+                                event,
+                            ) =>
                                 setTaskPriority(
                                     event.target
                                         .value as TaskPriority,
@@ -1249,10 +1713,15 @@ function TaskFormModal({
 
                     <input
                         type="date"
-                        value={taskDueDate}
-                        onChange={(event) =>
+                        value={
+                            taskDueDate
+                        }
+                        onChange={(
+                            event,
+                        ) =>
                             setTaskDueDate(
-                                event.target.value,
+                                event.target
+                                    .value,
                             )
                         }
                         className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none focus:border-[#527273]"
@@ -1264,7 +1733,9 @@ function TaskFormModal({
                 <div className="mt-7 flex justify-end gap-3">
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={
+                            onClose
+                        }
                         className="rounded-lg px-4 py-2.5 text-sm font-medium text-[#718282] transition hover:bg-[#edf1f0]"
                     >
                         Cancel
@@ -1272,7 +1743,9 @@ function TaskFormModal({
 
                     <button
                         type="button"
-                        onClick={onSave}
+                        onClick={
+                            onSave
+                        }
                         className="rounded-lg bg-[#214f51] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
                     >
                         {isEditing
