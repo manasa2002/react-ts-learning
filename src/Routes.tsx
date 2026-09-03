@@ -7,6 +7,7 @@ import { HomePage } from "./components/mainpage/Homepage";
 import Projects from "./components/Appshell/Projects";
 import MyTasks from "./components/Appshell/MyTasks";
 import ProjectBoard from "./components/Appshell/ProjectBoard";
+import Calender from "./components/Appshell/Calender";
 
 
 export default function RoutesComponent() {
@@ -22,6 +23,7 @@ export default function RoutesComponent() {
                     <Route path="/projects" element={<Projects />} />
                     <Route path="/projects/:projectId" element={<ProjectBoard />} />
                     <Route path="/tasks" element={<MyTasks />} />
+                    <Route path="/calendar" element={<Calender />} />
                 </Route>
             </Routes>
         </BrowserRouter>
