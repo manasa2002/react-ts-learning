@@ -1,322 +1,168 @@
+import { useEffect, useMemo, useState } from "react";
 import {
-    useEffect,
-    useMemo,
-    useState,
-    type ReactNode,
-} from "react";
-
-import {
-    closestCorners,
-    DndContext,
-    DragOverlay,
-    PointerSensor,
-    useDroppable,
-    useSensor,
-    useSensors,
-    type DragEndEvent,
-    type DragStartEvent,
-} from "@dnd-kit/core";
-
-import {
-    arrayMove,
-    SortableContext,
-    useSortable,
-    verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-
-import { CSS } from "@dnd-kit/utilities";
-
-import {
-    AlertTriangle,
+    ArrowRight,
     CalendarDays,
     CheckCircle2,
-    Clock3,
-    Edit3,
-    Filter,
+    FolderKanban,
     MoreHorizontal,
     Plus,
-    RotateCcw,
     Search,
     Trash2,
     Users,
     X,
+    Pencil,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 /* =====================================================
    TYPES
 ===================================================== */
 
-type TaskStatus = "todo" | "progress" | "done";
+type ProjectStatus = "active" | "completed" | "on-hold";
 
-type TaskPriority = "low" | "medium" | "high";
-
-interface Task {
-    id: number;
-    title: string;
+interface Project {
+    id: string;
+    name: string;
     description: string;
-    status: TaskStatus;
-    priority: TaskPriority;
-    assignee: string;
+    status: ProjectStatus;
+    progress: number;
     dueDate: string;
-}
-
-interface ProjectInfoProps {
-    icon: ReactNode;
-    label: string;
-    value: string;
-}
-
-interface BoardColumnProps {
-    id: TaskStatus;
-    title: string;
-    tasks: Task[];
-    onAddTask: () => void;
-    onTaskClick: (task: Task) => void;
+    members: string[];
+    taskCount: number;
 }
 
 /* =====================================================
-   INITIAL DATA
+   INITIAL PROJECT DATA
 ===================================================== */
 
-const initialTasks: Task[] = [
+const initialProjects: Project[] = [
     {
-        id: 1,
-        title: "Create wireframes",
+        id: "website-redesign",
+        name: "Website Redesign",
         description:
-            "Create the initial wireframes for the website pages and user flows.",
-        status: "todo",
-        priority: "high",
-        assignee: "M",
-        dueDate: "2026-09-05",
+            "Redesign the company website with a modern and improved user experience.",
+        status: "active",
+        progress: 72,
+        dueDate: "2026-09-15",
+        members: ["M", "A", "R"],
+        taskCount: 12,
     },
     {
-        id: 2,
-        title: "Research competitors",
+        id: "mobile-app",
+        name: "Mobile App Design",
         description:
-            "Analyze competitor products and identify useful UX patterns.",
-        status: "todo",
-        priority: "medium",
-        assignee: "M",
-        dueDate: "2026-09-07",
+            "Design and develop the mobile application experience for customers.",
+        status: "active",
+        progress: 45,
+        dueDate: "2026-09-25",
+        members: ["M", "S", "J"],
+        taskCount: 8,
     },
     {
-        id: 3,
-        title: "Setup repository",
+        id: "marketing-campaign",
+        name: "Marketing Campaign",
         description:
-            "Configure the project repository and development environment.",
-        status: "todo",
-        priority: "low",
-        assignee: "M",
-        dueDate: "2026-09-08",
+            "Prepare campaign assets and plan the upcoming product launch.",
+        status: "on-hold",
+        progress: 30,
+        dueDate: "2026-10-05",
+        members: ["A", "R"],
+        taskCount: 6,
     },
     {
-        id: 4,
-        title: "Design landing page",
+        id: "design-system",
+        name: "Design System",
         description:
-            "Create the complete UI design for the Trackly landing page.",
-        status: "progress",
-        priority: "high",
-        assignee: "A",
-        dueDate: "2026-09-04",
-    },
-    {
-        id: 5,
-        title: "Implement hero section",
-        description:
-            "Develop the landing page hero section using React and Tailwind CSS.",
-        status: "progress",
-        priority: "medium",
-        assignee: "M",
-        dueDate: "2026-09-06",
-    },
-    {
-        id: 6,
-        title: "Responsive header",
-        description:
-            "Make the navigation responsive for desktop, tablet and mobile.",
-        status: "progress",
-        priority: "medium",
-        assignee: "R",
-        dueDate: "2026-09-06",
-    },
-    {
-        id: 7,
-        title: "Project brief",
-        description:
-            "Finalize and approve the project requirements and goals.",
-        status: "done",
-        priority: "high",
-        assignee: "M",
-        dueDate: "2026-09-01",
-    },
-    {
-        id: 8,
-        title: "Color palette",
-        description:
-            "Create and finalize the product color system.",
-        status: "done",
-        priority: "medium",
-        assignee: "A",
-        dueDate: "2026-09-01",
-    },
-    {
-        id: 9,
-        title: "Typography",
-        description:
-            "Define typography rules for the application.",
-        status: "done",
-        priority: "low",
-        assignee: "R",
-        dueDate: "2026-09-01",
+            "Build reusable design components and establish visual guidelines.",
+        status: "completed",
+        progress: 100,
+        dueDate: "2026-08-30",
+        members: ["M", "A", "R", "S"],
+        taskCount: 18,
     },
 ];
-
-/* =====================================================
-   COLUMNS
-===================================================== */
-
-const columns: {
-    id: TaskStatus;
-    title: string;
-}[] = [
-        {
-            id: "todo",
-            title: "To Do",
-        },
-        {
-            id: "progress",
-            title: "In Progress",
-        },
-        {
-            id: "done",
-            title: "Done",
-        },
-    ];
 
 /* =====================================================
    MAIN COMPONENT
 ===================================================== */
 
-function Projects() {
-    /* =========================
-       TASK STATE
-    ========================= */
+export default function Projects() {
+    const navigate = useNavigate();
 
-    const [tasks, setTasks] = useState<Task[]>(() => {
-        const savedTasks =
-            localStorage.getItem(
-                "trackly-tasks",
-            );
+    const [projects, setProjects] = useState<Project[]>(() => {
+        const savedProjects = localStorage.getItem(
+            "trackly-projects",
+        );
 
-        if (savedTasks) {
+        if (savedProjects) {
             try {
-                return JSON.parse(
-                    savedTasks,
-                );
+                return JSON.parse(savedProjects);
             } catch {
-                return initialTasks;
+                return initialProjects;
             }
         }
 
-        return initialTasks;
+        return initialProjects;
     });
-
-    /* =========================
-       MODAL STATE
-    ========================= */
-
-    const [activeTask, setActiveTask] =
-        useState<Task | null>(null);
-
-    const [selectedTask, setSelectedTask] =
-        useState<Task | null>(null);
-
-    const [isModalOpen, setIsModalOpen] =
-        useState(false);
-
-    const [editingTaskId, setEditingTaskId] =
-        useState<number | null>(null);
-
-    /* =========================
-       FILTER STATE
-    ========================= */
 
     const [searchQuery, setSearchQuery] =
         useState("");
 
     const [statusFilter, setStatusFilter] =
-        useState<"all" | TaskStatus>(
-            "all",
-        );
+        useState<"all" | ProjectStatus>("all");
 
-    const [
-        priorityFilter,
-        setPriorityFilter,
-    ] = useState<
-        "all" | TaskPriority
-    >("all");
+    const [showProjectModal, setShowProjectModal] =
+        useState(false);
 
-    /* =========================
+    const [editingProject, setEditingProject] =
+        useState<Project | null>(null);
+
+    const [menuProjectId, setMenuProjectId] =
+        useState<string | null>(null);
+
+    /* =====================================================
        FORM STATE
-    ========================= */
+    ===================================================== */
 
-    const [taskTitle, setTaskTitle] =
+    const [projectName, setProjectName] =
         useState("");
 
-    const [
-        taskDescription,
-        setTaskDescription,
-    ] = useState("");
-
-    const [taskStatus, setTaskStatus] =
-        useState<TaskStatus>("todo");
-
-    const [
-        taskPriority,
-        setTaskPriority,
-    ] = useState<TaskPriority>(
-        "medium",
-    );
-
-    const [taskDueDate, setTaskDueDate] =
+    const [projectDescription, setProjectDescription] =
         useState("");
 
-    /* =========================
-       DRAG SENSOR
-    ========================= */
+    const [projectStatus, setProjectStatus] =
+        useState<ProjectStatus>("active");
 
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-    );
+    const [projectProgress, setProjectProgress] =
+        useState(0);
 
-    /* =========================
+    const [projectDueDate, setProjectDueDate] =
+        useState("");
+
+    /* =====================================================
        LOCAL STORAGE
-    ========================= */
+    ===================================================== */
 
     useEffect(() => {
         localStorage.setItem(
-            "trackly-tasks",
-            JSON.stringify(tasks),
+            "trackly-projects",
+            JSON.stringify(projects),
         );
-    }, [tasks]);
+    }, [projects]);
 
     /* =====================================================
-       FILTERED TASKS
+       FILTER PROJECTS
     ===================================================== */
 
-    const filteredTasks = useMemo(() => {
-        return tasks.filter((task) => {
+    const filteredProjects = useMemo(() => {
+        return projects.filter((project) => {
             const searchMatches =
-                task.title
+                project.name
                     .toLowerCase()
                     .includes(
                         searchQuery.toLowerCase(),
                     ) ||
-                task.description
+                project.description
                     .toLowerCase()
                     .includes(
                         searchQuery.toLowerCase(),
@@ -324,519 +170,275 @@ function Projects() {
 
             const statusMatches =
                 statusFilter === "all" ||
-                task.status === statusFilter;
-
-            const priorityMatches =
-                priorityFilter === "all" ||
-                task.priority ===
-                priorityFilter;
+                project.status === statusFilter;
 
             return (
                 searchMatches &&
-                statusMatches &&
-                priorityMatches
+                statusMatches
             );
         });
     }, [
-        tasks,
+        projects,
         searchQuery,
         statusFilter,
-        priorityFilter,
     ]);
 
     /* =====================================================
-       TASK STATISTICS
+       STATISTICS
     ===================================================== */
 
     const statistics = useMemo(() => {
-        const total = tasks.length;
+        const total = projects.length;
 
-        const todo = tasks.filter(
-            (task) =>
-                task.status === "todo",
+        const active = projects.filter(
+            (project) =>
+                project.status === "active",
         ).length;
 
-        const progress = tasks.filter(
-            (task) =>
-                task.status === "progress",
+        const completed = projects.filter(
+            (project) =>
+                project.status === "completed",
         ).length;
 
-        const done = tasks.filter(
-            (task) =>
-                task.status === "done",
-        ).length;
-
-        const overdue = tasks.filter(
-            (task) => {
-                if (
-                    !task.dueDate ||
-                    task.status === "done"
-                ) {
-                    return false;
-                }
-
-                return (
-                    new Date(task.dueDate) <
-                    new Date()
-                );
-            },
+        const onHold = projects.filter(
+            (project) =>
+                project.status === "on-hold",
         ).length;
 
         return {
             total,
-            todo,
-            progress,
-            done,
-            overdue,
+            active,
+            completed,
+            onHold,
         };
-    }, [tasks]);
-
-    /* =====================================================
-       CLEAR FILTERS
-    ===================================================== */
-
-    function clearFilters() {
-        setSearchQuery("");
-        setStatusFilter("all");
-        setPriorityFilter("all");
-    }
-
-    const hasActiveFilters =
-        searchQuery !== "" ||
-        statusFilter !== "all" ||
-        priorityFilter !== "all";
+    }, [projects]);
 
     /* =====================================================
        OPEN CREATE MODAL
     ===================================================== */
 
-    function openAddTaskModal(
-        status: TaskStatus = "todo",
-    ) {
-        setSelectedTask(null);
-        setEditingTaskId(null);
+    function openCreateProject() {
+        setEditingProject(null);
 
-        setTaskTitle("");
-        setTaskDescription("");
-        setTaskStatus(status);
-        setTaskPriority("medium");
-        setTaskDueDate("");
+        setProjectName("");
+        setProjectDescription("");
+        setProjectStatus("active");
+        setProjectProgress(0);
+        setProjectDueDate("");
 
-        setIsModalOpen(true);
+        setShowProjectModal(true);
     }
 
     /* =====================================================
        OPEN EDIT MODAL
     ===================================================== */
 
-    function openEditTaskModal(
-        task: Task,
+    function openEditProject(
+        project: Project,
     ) {
-        setSelectedTask(null);
+        setEditingProject(project);
 
-        setEditingTaskId(task.id);
+        setProjectName(project.name);
 
-        setTaskTitle(task.title);
-        setTaskDescription(
-            task.description,
+        setProjectDescription(
+            project.description,
         );
-        setTaskStatus(task.status);
-        setTaskPriority(task.priority);
-        setTaskDueDate(task.dueDate);
 
-        setIsModalOpen(true);
+        setProjectStatus(
+            project.status,
+        );
+
+        setProjectProgress(
+            project.progress,
+        );
+
+        setProjectDueDate(
+            project.dueDate,
+        );
+
+        setShowProjectModal(true);
+
+        setMenuProjectId(null);
     }
 
     /* =====================================================
-       CREATE / UPDATE TASK
+       SAVE PROJECT
     ===================================================== */
 
-    function handleSaveTask() {
-        if (!taskTitle.trim()) return;
+    function saveProject() {
+        if (!projectName.trim()) return;
 
-        if (
-            editingTaskId !== null
-        ) {
-            setTasks(
-                (previousTasks) =>
-                    previousTasks.map(
-                        (task) =>
-                            task.id ===
-                                editingTaskId
+        if (editingProject) {
+            setProjects(
+                (previousProjects) =>
+                    previousProjects.map(
+                        (project) =>
+                            project.id ===
+                                editingProject.id
                                 ? {
-                                    ...task,
-                                    title:
-                                        taskTitle.trim(),
+                                    ...project,
+                                    name:
+                                        projectName.trim(),
                                     description:
-                                        taskDescription.trim(),
+                                        projectDescription.trim(),
                                     status:
-                                        taskStatus,
-                                    priority:
-                                        taskPriority,
+                                        projectStatus,
+                                    progress:
+                                        Number(
+                                            projectProgress,
+                                        ),
                                     dueDate:
-                                        taskDueDate,
+                                        projectDueDate,
                                 }
-                                : task,
+                                : project,
                     ),
             );
         } else {
-            const newTask: Task = {
-                id: Date.now(),
-                title: taskTitle.trim(),
+            const newProject: Project = {
+                id: `${projectName
+                    .toLowerCase()
+                    .replace(/\s+/g, "-")}-${Date.now()}`,
+                name: projectName.trim(),
                 description:
-                    taskDescription.trim(),
-                status: taskStatus,
-                priority: taskPriority,
-                assignee: "M",
-                dueDate: taskDueDate,
+                    projectDescription.trim(),
+                status: projectStatus,
+                progress: Number(
+                    projectProgress,
+                ),
+                dueDate: projectDueDate,
+                members: ["M"],
+                taskCount: 0,
             };
 
-            setTasks(
-                (previousTasks) => [
-                    ...previousTasks,
-                    newTask,
+            setProjects(
+                (previousProjects) => [
+                    newProject,
+                    ...previousProjects,
                 ],
             );
         }
 
-        setIsModalOpen(false);
+        setShowProjectModal(false);
     }
 
     /* =====================================================
-       DELETE TASK
+       DELETE PROJECT
     ===================================================== */
 
-    function handleDeleteTask(
-        taskId: number,
+    function deleteProject(
+        projectId: string,
     ) {
         const shouldDelete =
             window.confirm(
-                "Are you sure you want to delete this task?",
+                "Are you sure you want to delete this project?",
             );
 
         if (!shouldDelete) return;
 
-        setTasks(
-            (previousTasks) =>
-                previousTasks.filter(
-                    (task) =>
-                        task.id !== taskId,
+        setProjects(
+            (previousProjects) =>
+                previousProjects.filter(
+                    (project) =>
+                        project.id !== projectId,
                 ),
         );
 
-        setSelectedTask(null);
+        setMenuProjectId(null);
     }
 
     /* =====================================================
-       DRAG START
+       FORMAT DATE
     ===================================================== */
 
-    function handleDragStart(
-        event: DragStartEvent,
-    ) {
-        const taskId = Number(
-            event.active.id,
-        );
+    function formatDate(date: string) {
+        if (!date) return "No due date";
 
-        const task = tasks.find(
-            (item) =>
-                item.id === taskId,
-        );
-
-        if (task) {
-            setActiveTask(task);
-        }
-    }
-
-    /* =====================================================
-       DRAG END
-       + SAME COLUMN SORTING
-       + CROSS COLUMN MOVEMENT
-    ===================================================== */
-
-    function handleDragEnd(
-        event: DragEndEvent,
-    ) {
-        const { active, over } =
-            event;
-
-        setActiveTask(null);
-
-        if (!over) return;
-
-        const activeId = Number(
-            active.id,
-        );
-
-        const overId = over.id;
-
-        const activeTask = tasks.find(
-            (task) =>
-                task.id === activeId,
-        );
-
-        if (!activeTask) return;
-
-        /* =========================
-           DROPPED ON COLUMN
-        ========================= */
-
-        const targetColumn =
-            columns.find(
-                (column) =>
-                    column.id === overId,
-            );
-
-        if (targetColumn) {
-            setTasks(
-                (previousTasks) => {
-                    const activeIndex =
-                        previousTasks.findIndex(
-                            (task) =>
-                                task.id ===
-                                activeId,
-                        );
-
-                    if (
-                        activeIndex === -1
-                    ) {
-                        return previousTasks;
-                    }
-
-                    const updatedTasks = [
-                        ...previousTasks,
-                    ];
-
-                    const movedTask = {
-                        ...updatedTasks[
-                        activeIndex
-                        ],
-                        status:
-                            targetColumn.id,
-                    };
-
-                    updatedTasks.splice(
-                        activeIndex,
-                        1,
-                    );
-
-                    let insertIndex =
-                        updatedTasks.length;
-
-                    for (
-                        let i =
-                            updatedTasks.length -
-                            1;
-                        i >= 0;
-                        i--
-                    ) {
-                        if (
-                            updatedTasks[i]
-                                .status ===
-                            targetColumn.id
-                        ) {
-                            insertIndex =
-                                i + 1;
-                            break;
-                        }
-                    }
-
-                    updatedTasks.splice(
-                        insertIndex,
-                        0,
-                        movedTask,
-                    );
-
-                    return updatedTasks;
-                },
-            );
-
-            return;
-        }
-
-        /* =========================
-           DROPPED ON TASK
-        ========================= */
-
-        const overTaskId =
-            Number(overId);
-
-        const overTask =
-            tasks.find(
-                (task) =>
-                    task.id ===
-                    overTaskId,
-            );
-
-        if (!overTask) return;
-
-        setTasks(
-            (previousTasks) => {
-                const oldIndex =
-                    previousTasks.findIndex(
-                        (task) =>
-                            task.id ===
-                            activeId,
-                    );
-
-                const newIndex =
-                    previousTasks.findIndex(
-                        (task) =>
-                            task.id ===
-                            overTaskId,
-                    );
-
-                if (
-                    oldIndex === -1 ||
-                    newIndex === -1
-                ) {
-                    return previousTasks;
-                }
-
-                /* SAME COLUMN */
-
-                if (
-                    activeTask.status ===
-                    overTask.status
-                ) {
-                    return arrayMove(
-                        previousTasks,
-                        oldIndex,
-                        newIndex,
-                    );
-                }
-
-                /* DIFFERENT COLUMN */
-
-                const updatedTasks = [
-                    ...previousTasks,
-                ];
-
-                updatedTasks[
-                    oldIndex
-                ] = {
-                    ...updatedTasks[
-                    oldIndex
-                    ],
-                    status:
-                        overTask.status,
-                };
-
-                return arrayMove(
-                    updatedTasks,
-                    oldIndex,
-                    newIndex,
-                );
+        return new Date(
+            `${date}T00:00:00`,
+        ).toLocaleDateString(
+            "en-US",
+            {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
             },
         );
     }
 
     /* =====================================================
-       JSX
+       RENDER
     ===================================================== */
 
     return (
-        <div className="mx-auto max-w-[1400px]">
+        <div className="mx-auto max-w-[1250px]">
 
             {/* HEADER */}
 
-            <section className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-center">
+            <section className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
                 <div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-[#8a9b9b]">
-                            Projects
-                        </span>
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#849595]">
+                        Workspace
+                    </p>
 
-                        <span className="text-xs text-[#b0baba]">
-                            /
-                        </span>
-
-                        <span className="text-xs text-[#527273]">
-                            Website Redesign
-                        </span>
-                    </div>
-
-                    <h1 className="mt-3 text-2xl font-semibold text-[#29494a]">
-                        Website Redesign
+                    <h1 className="mt-3 text-3xl font-semibold tracking-tight text-[#29494a]">
+                        Projects
                     </h1>
 
                     <p className="mt-2 text-sm text-[#849595]">
-                        Design and development workspace.
+                        Organize projects and keep your team's work moving forward.
                     </p>
                 </div>
 
                 <button
                     type="button"
-                    onClick={() =>
-                        openAddTaskModal()
-                    }
-                    className="flex items-center gap-2 rounded-lg bg-[#214f51] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
+                    onClick={openCreateProject}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-[#214f51] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#183f41]"
                 >
-                    <Plus size={16} />
-                    Add task
+                    <Plus size={18} />
+                    New Project
                 </button>
             </section>
 
-            {/* =================================================
-          STATISTICS
-      ================================================= */}
+            {/* STATISTICS */}
 
-            <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <ProjectInfo
+            <section className="mb-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <ProjectStatCard
                     icon={
-                        <MoreHorizontal
-                            size={17}
-                        />
+                        <FolderKanban size={19} />
                     }
-                    label="Total Tasks"
-                    value={`${statistics.total}`}
+                    label="Total Projects"
+                    value={statistics.total}
                 />
 
-                <ProjectInfo
+                <ProjectStatCard
                     icon={
-                        <Clock3 size={17} />
+                        <FolderKanban size={19} />
                     }
-                    label="To Do"
-                    value={`${statistics.todo}`}
+                    label="Active"
+                    value={statistics.active}
                 />
 
-                <ProjectInfo
+                <ProjectStatCard
                     icon={
-                        <Filter size={17} />
-                    }
-                    label="In Progress"
-                    value={`${statistics.progress}`}
-                />
-
-                <ProjectInfo
-                    icon={
-                        <CheckCircle2
-                            size={17}
-                        />
+                        <CheckCircle2 size={19} />
                     }
                     label="Completed"
-                    value={`${statistics.done}`}
+                    value={statistics.completed}
                 />
 
-                <ProjectInfo
+                <ProjectStatCard
                     icon={
-                        <AlertTriangle
-                            size={17}
-                        />
+                        <CalendarDays size={19} />
                     }
-                    label="Overdue"
-                    value={`${statistics.overdue}`}
+                    label="On Hold"
+                    value={statistics.onHold}
                 />
             </section>
 
-            {/* =================================================
-          SEARCH + FILTERS
-      ================================================= */}
+            {/* SEARCH + FILTER */}
 
-            <section className="mb-7 rounded-2xl border border-[#e1e7e5] bg-[#f9faf9] p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-
-                    {/* SEARCH */}
+            <section className="mb-8 rounded-2xl border border-[#e1e7e5] bg-[#f9faf9] p-4">
+                <div className="flex flex-col gap-3 md:flex-row">
 
                     <div className="relative flex-1">
                         <Search
@@ -846,765 +448,456 @@ function Projects() {
 
                         <input
                             value={searchQuery}
-                            onChange={(
-                                event,
-                            ) =>
+                            onChange={(event) =>
                                 setSearchQuery(
                                     event.target.value,
                                 )
                             }
-                            placeholder="Search tasks..."
-                            className="w-full rounded-xl border border-[#dce4e2] bg-white py-2.5 pl-10 pr-4 text-sm text-[#29494a] outline-none placeholder:text-[#a7b3b3] focus:border-[#527273]"
+                            placeholder="Search projects..."
+                            className="w-full rounded-xl border border-[#dce4e2] bg-white py-3 pl-10 pr-4 text-sm text-[#29494a] outline-none placeholder:text-[#a7b3b3] focus:border-[#527273]"
                         />
                     </div>
 
-                    {/* STATUS FILTER */}
-
                     <select
                         value={statusFilter}
-                        onChange={(
-                            event,
-                        ) =>
+                        onChange={(event) =>
                             setStatusFilter(
                                 event.target
                                     .value as
                                 | "all"
-                                | TaskStatus,
+                                | ProjectStatus,
                             )
                         }
-                        className="rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#527273] outline-none focus:border-[#527273]"
+                        className="rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#527273] outline-none focus:border-[#527273]"
                     >
                         <option value="all">
-                            All Status
+                            All Projects
                         </option>
 
-                        <option value="todo">
-                            To Do
+                        <option value="active">
+                            Active
                         </option>
 
-                        <option value="progress">
-                            In Progress
+                        <option value="completed">
+                            Completed
                         </option>
 
-                        <option value="done">
-                            Done
-                        </option>
-                    </select>
-
-                    {/* PRIORITY FILTER */}
-
-                    <select
-                        value={priorityFilter}
-                        onChange={(
-                            event,
-                        ) =>
-                            setPriorityFilter(
-                                event.target
-                                    .value as
-                                | "all"
-                                | TaskPriority,
-                            )
-                        }
-                        className="rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#527273] outline-none focus:border-[#527273]"
-                    >
-                        <option value="all">
-                            All Priority
-                        </option>
-
-                        <option value="high">
-                            High
-                        </option>
-
-                        <option value="medium">
-                            Medium
-                        </option>
-
-                        <option value="low">
-                            Low
+                        <option value="on-hold">
+                            On Hold
                         </option>
                     </select>
-
-                    {/* CLEAR */}
-
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            onClick={
-                                clearFilters
-                            }
-                            className="flex items-center justify-center gap-2 rounded-xl border border-[#dce4e2] bg-white px-4 py-2.5 text-sm text-[#718282] transition hover:bg-[#eef2f1]"
-                        >
-                            <RotateCcw
-                                size={16}
-                            />
-                            Clear
-                        </button>
-                    )}
                 </div>
-
-                {/* FILTER RESULT */}
-
-                {hasActiveFilters && (
-                    <p className="mt-3 text-xs text-[#849595]">
-                        Showing{" "}
-                        <span className="font-semibold text-[#527273]">
-                            {
-                                filteredTasks.length
-                            }
-                        </span>{" "}
-                        matching tasks.
-                    </p>
-                )}
             </section>
 
-            {/* =================================================
-          KANBAN BOARD
-      ================================================= */}
+            {/* PROJECT GRID */}
 
-            <DndContext
-                sensors={sensors}
-                collisionDetection={
-                    closestCorners
-                }
-                onDragStart={
-                    handleDragStart
-                }
-                onDragEnd={
-                    handleDragEnd
-                }
-            >
-                <section className="grid gap-4 lg:grid-cols-3">
-                    {columns.map(
-                        (column) => {
-                            const columnTasks =
-                                filteredTasks.filter(
-                                    (task) =>
-                                        task.status ===
-                                        column.id,
-                                );
+            {filteredProjects.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#d6dfdc] bg-[#fafbfa] px-5 py-16 text-center">
+                    <FolderKanban
+                        size={34}
+                        className="mx-auto text-[#9daead]"
+                    />
 
-                            return (
-                                <BoardColumn
-                                    key={
-                                        column.id
-                                    }
-                                    id={column.id}
-                                    title={
-                                        column.title
-                                    }
-                                    tasks={
-                                        columnTasks
-                                    }
-                                    onAddTask={() =>
-                                        openAddTaskModal(
-                                            column.id,
-                                        )
-                                    }
-                                    onTaskClick={(
-                                        task,
-                                    ) =>
-                                        setSelectedTask(
-                                            task,
-                                        )
-                                    }
-                                />
-                            );
-                        },
-                    )}
-                </section>
+                    <h3 className="mt-4 text-base font-medium text-[#29494a]">
+                        No projects found
+                    </h3>
 
-                {/* DRAG OVERLAY */}
-
-                <DragOverlay>
-                    {activeTask ? (
-                        <TaskCard
-                            task={
-                                activeTask
-                            }
-                            isDragging
-                            onClick={() => { }}
-                        />
-                    ) : null}
-                </DragOverlay>
-            </DndContext>
-
-            {/* =================================================
-          TASK DETAILS MODAL
-      ================================================= */}
-
-            {selectedTask && (
-                <TaskDetailsModal
-                    task={selectedTask}
-                    onClose={() =>
-                        setSelectedTask(
-                            null,
-                        )
-                    }
-                    onEdit={() =>
-                        openEditTaskModal(
-                            selectedTask,
-                        )
-                    }
-                    onDelete={() =>
-                        handleDeleteTask(
-                            selectedTask.id,
-                        )
-                    }
-                />
-            )}
-
-            {/* =================================================
-          TASK FORM MODAL
-      ================================================= */}
-
-            {isModalOpen && (
-                <TaskFormModal
-                    isEditing={
-                        editingTaskId !==
-                        null
-                    }
-                    taskTitle={
-                        taskTitle
-                    }
-                    taskDescription={
-                        taskDescription
-                    }
-                    taskStatus={
-                        taskStatus
-                    }
-                    taskPriority={
-                        taskPriority
-                    }
-                    taskDueDate={
-                        taskDueDate
-                    }
-                    onClose={() =>
-                        setIsModalOpen(
-                            false,
-                        )
-                    }
-                    onSave={
-                        handleSaveTask
-                    }
-                    setTaskTitle={
-                        setTaskTitle
-                    }
-                    setTaskDescription={
-                        setTaskDescription
-                    }
-                    setTaskStatus={
-                        setTaskStatus
-                    }
-                    setTaskPriority={
-                        setTaskPriority
-                    }
-                    setTaskDueDate={
-                        setTaskDueDate
-                    }
-                />
-            )}
-        </div>
-    );
-}
-
-/* =====================================================
-   PROJECT INFO
-===================================================== */
-
-function ProjectInfo({
-    icon,
-    label,
-    value,
-}: ProjectInfoProps) {
-    return (
-        <div className="flex items-center gap-3 rounded-xl border border-[#e1e7e5] bg-[#f9faf9] p-4">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#e6f0ee] text-[#315b5d]">
-                {icon}
-            </div>
-
-            <div>
-                <p className="text-[10px] uppercase tracking-wide text-[#8a9b9b]">
-                    {label}
-                </p>
-
-                <p className="mt-1 text-xs font-semibold text-[#29494a]">
-                    {value}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-/* =====================================================
-   BOARD COLUMN
-===================================================== */
-
-function BoardColumn({
-    id,
-    title,
-    tasks,
-    onAddTask,
-    onTaskClick,
-}: BoardColumnProps) {
-    const {
-        setNodeRef,
-        isOver,
-    } = useDroppable({
-        id,
-    });
-
-    return (
-        <div
-            ref={setNodeRef}
-            className={`
-        min-h-[500px]
-        rounded-2xl
-        border
-        p-3
-        transition
-        ${isOver
-                    ? "border-[#527273] bg-[#e8f0ee]"
-                    : "border-[#e1e7e5] bg-[#eef2f1]/60"
-                }
-      `}
-        >
-            {/* HEADER */}
-
-            <div className="mb-4 flex items-center justify-between px-2 pt-2">
-                <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-[#29494a]">
-                        {title}
-                    </h2>
-
-                    <span className="rounded-md bg-white px-2 py-0.5 text-[10px] text-[#849595]">
-                        {tasks.length}
-                    </span>
+                    <p className="mt-2 text-sm text-[#849595]">
+                        Try changing your search or create a new project.
+                    </p>
                 </div>
-
-                <button
-                    type="button"
-                    onClick={
-                        onAddTask
-                    }
-                    className="text-[#849595] transition hover:text-[#29494a]"
-                >
-                    <Plus size={17} />
-                </button>
-            </div>
-
-            {/* SORTABLE */}
-
-            <SortableContext
-                items={tasks.map(
-                    (task) => task.id,
-                )}
-                strategy={
-                    verticalListSortingStrategy
-                }
-            >
-                <div className="space-y-3">
-                    {tasks.map(
-                        (task) => (
-                            <SortableTask
-                                key={task.id}
-                                task={task}
-                                onClick={() =>
-                                    onTaskClick(
-                                        task,
+            ) : (
+                <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    {filteredProjects.map(
+                        (project) => (
+                            <ProjectCard
+                                key={project.id}
+                                project={project}
+                                formatDate={formatDate}
+                                isMenuOpen={
+                                    menuProjectId ===
+                                    project.id
+                                }
+                                onToggleMenu={() =>
+                                    setMenuProjectId(
+                                        menuProjectId ===
+                                            project.id
+                                            ? null
+                                            : project.id,
+                                    )
+                                }
+                                onOpen={() =>
+                                    navigate(`/projects/${project.id}`)
+                                }
+                                onEdit={() =>
+                                    openEditProject(
+                                        project,
+                                    )
+                                }
+                                onDelete={() =>
+                                    deleteProject(
+                                        project.id,
                                     )
                                 }
                             />
                         ),
                     )}
-                </div>
-            </SortableContext>
-
-            {/* ADD TASK */}
-
-            <button
-                type="button"
-                onClick={
-                    onAddTask
-                }
-                className="mt-3 flex min-h-[80px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#cbd7d4] text-xs text-[#849595] transition hover:border-[#789b97] hover:bg-white/70"
-            >
-                <Plus size={16} />
-                Add task
-            </button>
-        </div>
-    );
-}
-
-/* =====================================================
-   SORTABLE TASK
-===================================================== */
-
-function SortableTask({
-    task,
-    onClick,
-}: {
-    task: Task;
-    onClick: () => void;
-}) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({
-        id: task.id,
-    });
-
-    const style = {
-        transform:
-            CSS.Transform.toString(
-                transform,
-            ),
-        transition,
-    };
-
-    return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            {...attributes}
-            {...listeners}
-            onClick={
-                onClick
-            }
-            className={
-                isDragging
-                    ? "opacity-30"
-                    : "cursor-grab active:cursor-grabbing"
-            }
-        >
-            <TaskCard
-                task={task}
-                onClick={
-                    onClick
-                }
-            />
-        </div>
-    );
-}
-
-/* =====================================================
-   TASK CARD
-===================================================== */
-
-function TaskCard({
-    task,
-    isDragging = false,
-    onClick,
-}: {
-    task: Task;
-    isDragging?: boolean;
-    onClick: () => void;
-}) {
-    const priorityStyles = {
-        high:
-            "bg-[#fbe0da] text-[#b85d4c]",
-        medium:
-            "bg-[#f6edd1] text-[#a9842f]",
-        low:
-            "bg-[#dceee8] text-[#4c8774]",
-    };
-
-    return (
-        <button
-            type="button"
-            onClick={
-                onClick
-            }
-            className={`
-        w-full
-        rounded-xl
-        border border-[#dde5e3]
-        bg-white
-        p-4
-        text-left
-        shadow-[0_2px_8px_rgba(25,60,60,0.05)]
-        transition
-        ${isDragging
-                    ? "rotate-2 scale-[1.02] shadow-xl"
-                    : "hover:-translate-y-0.5 hover:shadow-md"
-                }
-      `}
-        >
-            <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium text-[#29494a]">
-                    {task.title}
-                </p>
-
-                <span
-                    className={`
-            rounded-md
-            px-2 py-1
-            text-[9px]
-            font-medium
-            ${priorityStyles[
-                        task.priority
-                        ]
-                        }
-          `}
-                >
-                    {task.priority}
-                </span>
-            </div>
-
-            {task.description && (
-                <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#849595]">
-                    {
-                        task.description
-                    }
-                </p>
+                </section>
             )}
 
-            <div className="mt-5 flex items-center justify-between">
-                <span className="text-[10px] text-[#8a9b9b]">
-                    {task.dueDate ||
-                        "No due date"}
-                </span>
+            {/* CREATE / EDIT MODAL */}
 
-                <div className="grid h-6 w-6 place-items-center rounded-full bg-[#dcebea] text-[9px] font-semibold text-[#527273]">
-                    {
-                        task.assignee
+            {showProjectModal && (
+                <ProjectModal
+                    editingProject={
+                        editingProject
                     }
-                </div>
-            </div>
-        </button>
-    );
-}
-
-/* =====================================================
-   TASK DETAILS MODAL
-===================================================== */
-
-function TaskDetailsModal({
-    task,
-    onClose,
-    onEdit,
-    onDelete,
-}: {
-    task: Task;
-    onClose: () => void;
-    onEdit: () => void;
-    onDelete: () => void;
-}) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#163536]/30 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl bg-[#f9faf9] p-6 shadow-2xl">
-
-                <div className="flex items-start justify-between">
-                    <div>
-                        <p className="text-xs text-[#849595]">
-                            TASK DETAILS
-                        </p>
-
-                        <h2 className="mt-2 text-xl font-semibold text-[#29494a]">
-                            {
-                                task.title
-                            }
-                        </h2>
-                    </div>
-
-                    <button
-                        type="button"
-                        onClick={
-                            onClose
-                        }
-                        className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#edf1f0]"
-                    >
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <p className="mt-6 text-sm leading-6 text-[#718282]">
-                    {task.description ||
-                        "No description added."}
-                </p>
-
-                <div className="mt-7 grid grid-cols-2 gap-4">
-                    <DetailItem
-                        label="Status"
-                        value={
-                            task.status
-                        }
-                    />
-
-                    <DetailItem
-                        label="Priority"
-                        value={
-                            task.priority
-                        }
-                    />
-
-                    <DetailItem
-                        label="Assignee"
-                        value={
-                            task.assignee
-                        }
-                    />
-
-                    <DetailItem
-                        label="Due Date"
-                        value={
-                            task.dueDate ||
-                            "Not assigned"
-                        }
-                    />
-                </div>
-
-                <div className="mt-8 flex justify-between">
-                    <button
-                        type="button"
-                        onClick={
-                            onDelete
-                        }
-                        className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-[#c65b50] transition hover:bg-[#fdebea]"
-                    >
-                        <Trash2
-                            size={16}
-                        />
-                        Delete
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={
-                            onEdit
-                        }
-                        className="flex items-center gap-2 rounded-lg bg-[#214f51] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
-                    >
-                        <Edit3
-                            size={16}
-                        />
-                        Edit task
-                    </button>
-                </div>
-            </div>
+                    projectName={projectName}
+                    projectDescription={
+                        projectDescription
+                    }
+                    projectStatus={
+                        projectStatus
+                    }
+                    projectProgress={
+                        projectProgress
+                    }
+                    projectDueDate={
+                        projectDueDate
+                    }
+                    onClose={() =>
+                        setShowProjectModal(false)
+                    }
+                    onSave={saveProject}
+                    setProjectName={
+                        setProjectName
+                    }
+                    setProjectDescription={
+                        setProjectDescription
+                    }
+                    setProjectStatus={
+                        setProjectStatus
+                    }
+                    setProjectProgress={
+                        setProjectProgress
+                    }
+                    setProjectDueDate={
+                        setProjectDueDate
+                    }
+                />
+            )}
         </div>
     );
 }
 
 /* =====================================================
-   DETAIL ITEM
+   PROJECT STAT CARD
 ===================================================== */
 
-function DetailItem({
+function ProjectStatCard({
+    icon,
     label,
     value,
 }: {
+    icon: React.ReactNode;
     label: string;
-    value: string;
+    value: number;
 }) {
     return (
-        <div className="rounded-xl bg-white p-3">
-            <p className="text-[10px] uppercase tracking-wide text-[#8a9b9b]">
-                {label}
-            </p>
+        <div className="rounded-2xl border border-[#e1e7e5] bg-[#f9faf9] p-5">
+            <div className="flex items-center justify-between">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e6f0ee] text-[#315b5d]">
+                    {icon}
+                </div>
 
-            <p className="mt-1 text-sm font-medium capitalize text-[#29494a]">
-                {value}
+                <p className="text-2xl font-semibold text-[#29494a]">
+                    {value}
+                </p>
+            </div>
+
+            <p className="mt-4 text-sm text-[#849595]">
+                {label}
             </p>
         </div>
     );
 }
 
 /* =====================================================
-   TASK FORM MODAL
+   PROJECT CARD
 ===================================================== */
 
-function TaskFormModal({
-    isEditing,
-    taskTitle,
-    taskDescription,
-    taskStatus,
-    taskPriority,
-    taskDueDate,
+function ProjectCard({
+    project,
+    formatDate,
+    isMenuOpen,
+    onToggleMenu,
+    onOpen,
+    onEdit,
+    onDelete,
+}: {
+    project: Project;
+    formatDate: (
+        date: string,
+    ) => string;
+    isMenuOpen: boolean;
+    onToggleMenu: () => void;
+    onOpen: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+}) {
+    const statusStyles = {
+        active:
+            "bg-[#dceee8] text-[#4c8774]",
+        completed:
+            "bg-[#e5eeee] text-[#527273]",
+        "on-hold":
+            "bg-[#f6edd1] text-[#a9842f]",
+    };
+
+    return (
+        <article className="group relative rounded-2xl border border-[#e1e7e5] bg-white p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[#cbd8d5] hover:shadow-lg">
+
+            {/* HEADER */}
+
+            <div className="flex items-start justify-between gap-4">
+                <div className="grid h-11 w-11 place-items-center rounded-xl bg-[#e6f0ee] text-[#315b5d]">
+                    <FolderKanban size={21} />
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-medium capitalize ${statusStyles[
+                            project.status
+                        ]
+                            }`}
+                    >
+                        {project.status ===
+                            "on-hold"
+                            ? "On Hold"
+                            : project.status}
+                    </span>
+
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={onToggleMenu}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-[#849595] transition hover:bg-[#eef2f1]"
+                        >
+                            <MoreHorizontal
+                                size={18}
+                            />
+                        </button>
+
+                        {isMenuOpen && (
+                            <div className="absolute right-0 top-10 z-20 w-36 rounded-xl border border-[#e1e7e5] bg-white p-1.5 shadow-xl">
+                                <button
+                                    type="button"
+                                    onClick={onEdit}
+                                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[#527273] transition hover:bg-[#f2f5f4]"
+                                >
+                                    <Pencil size={14} />
+                                    Edit Project
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={onDelete}
+                                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[#c65b50] transition hover:bg-[#fde8e4]"
+                                >
+                                    <Trash2 size={14} />
+                                    Delete
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* CONTENT */}
+
+            <h2 className="mt-5 text-lg font-semibold text-[#29494a]">
+                {project.name}
+            </h2>
+
+            <p className="mt-2 min-h-[40px] text-sm leading-5 text-[#849595]">
+                {project.description}
+            </p>
+
+            {/* PROGRESS */}
+
+            <div className="mt-6">
+                <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs text-[#849595]">
+                        Progress
+                    </span>
+
+                    <span className="text-xs font-semibold text-[#527273]">
+                        {project.progress}%
+                    </span>
+                </div>
+
+                <div className="h-1.5 overflow-hidden rounded-full bg-[#e8edeb]">
+                    <div
+                        className="h-full rounded-full bg-[#315b5d] transition-all duration-500"
+                        style={{
+                            width: `${project.progress}%`,
+                        }}
+                    />
+                </div>
+            </div>
+
+            {/* PROJECT DETAILS */}
+
+            <div className="mt-6 flex items-center justify-between border-t border-[#edf1f0] pt-4">
+
+                <div className="flex items-center gap-2 text-xs text-[#849595]">
+                    <CalendarDays size={15} />
+
+                    {formatDate(
+                        project.dueDate,
+                    )}
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs text-[#849595]">
+                    <CheckCircle2 size={15} />
+
+                    {project.taskCount} tasks
+                </div>
+            </div>
+
+            {/* FOOTER */}
+
+            <div className="mt-5 flex items-center justify-between">
+
+                {/* MEMBERS */}
+
+                <div className="flex -space-x-2">
+                    {project.members
+                        .slice(0, 4)
+                        .map((member, index) => (
+                            <div
+                                key={`${member}-${index}`}
+                                className="grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-[#dfeae7] text-[10px] font-semibold text-[#527273]"
+                            >
+                                {member}
+                            </div>
+                        ))}
+
+                    {project.members.length >
+                        4 && (
+                            <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-[#eef2f1] text-[9px] font-semibold text-[#527273]">
+                                +
+                                {project.members
+                                    .length - 4}
+                            </div>
+                        )}
+                </div>
+
+                {/* OPEN */}
+
+                <button
+                    type="button"
+                    onClick={onOpen}
+                    className="flex items-center gap-1.5 text-sm font-medium text-[#315b5d] transition hover:text-[#183f41]"
+                >
+                    Open
+                    <ArrowRight size={16} />
+                </button>
+            </div>
+        </article>
+    );
+}
+
+/* =====================================================
+   PROJECT MODAL
+===================================================== */
+
+function ProjectModal({
+    editingProject,
+    projectName,
+    projectDescription,
+    projectStatus,
+    projectProgress,
+    projectDueDate,
     onClose,
     onSave,
-    setTaskTitle,
-    setTaskDescription,
-    setTaskStatus,
-    setTaskPriority,
-    setTaskDueDate,
+    setProjectName,
+    setProjectDescription,
+    setProjectStatus,
+    setProjectProgress,
+    setProjectDueDate,
 }: {
-    isEditing: boolean;
-    taskTitle: string;
-    taskDescription: string;
-    taskStatus: TaskStatus;
-    taskPriority: TaskPriority;
-    taskDueDate: string;
+    editingProject: Project | null;
+    projectName: string;
+    projectDescription: string;
+    projectStatus: ProjectStatus;
+    projectProgress: number;
+    projectDueDate: string;
     onClose: () => void;
     onSave: () => void;
-    setTaskTitle: (
+    setProjectName: (
         value: string,
     ) => void;
-    setTaskDescription: (
+    setProjectDescription: (
         value: string,
     ) => void;
-    setTaskStatus: (
-        value: TaskStatus,
+    setProjectStatus: (
+        value: ProjectStatus,
     ) => void;
-    setTaskPriority: (
-        value: TaskPriority,
+    setProjectProgress: (
+        value: number,
     ) => void;
-    setTaskDueDate: (
+    setProjectDueDate: (
         value: string,
     ) => void;
 }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#163536]/30 p-4 backdrop-blur-sm">
+
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#f9faf9] p-6 shadow-2xl">
 
-                <div className="flex items-center justify-between">
+                {/* HEADER */}
+
+                <div className="flex items-start justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-[#29494a]">
-                            {isEditing
-                                ? "Edit Task"
-                                : "Create Task"}
+                        <h2 className="text-xl font-semibold text-[#29494a]">
+                            {editingProject
+                                ? "Edit Project"
+                                : "Create Project"}
                         </h2>
 
-                        <p className="mt-1 text-xs text-[#849595]">
-                            Manage your project task.
+                        <p className="mt-1 text-sm text-[#849595]">
+                            {editingProject
+                                ? "Update your project details."
+                                : "Create a new workspace project."}
                         </p>
                     </div>
 
                     <button
                         type="button"
-                        onClick={
-                            onClose
-                        }
-                        className="grid h-9 w-9 place-items-center rounded-lg transition hover:bg-[#edf1f0]"
+                        onClick={onClose}
+                        className="grid h-9 w-9 place-items-center rounded-lg text-[#718282] transition hover:bg-[#edf1f0]"
                     >
                         <X size={18} />
                     </button>
                 </div>
 
-                {/* TITLE */}
+                {/* PROJECT NAME */}
 
                 <div className="mt-6">
                     <label className="text-xs font-medium text-[#527273]">
-                        Task title
+                        Project Name
                     </label>
 
                     <input
                         autoFocus
-                        value={
-                            taskTitle
-                        }
-                        onChange={(
-                            event,
-                        ) =>
-                            setTaskTitle(
-                                event.target
-                                    .value,
+                        value={projectName}
+                        onChange={(event) =>
+                            setProjectName(
+                                event.target.value,
                             )
                         }
-                        placeholder="What needs to be done?"
+                        placeholder="Enter project name"
                         className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none placeholder:text-[#a7b3b3] focus:border-[#527273]"
                     />
                 </div>
@@ -1617,111 +910,91 @@ function TaskFormModal({
                     </label>
 
                     <textarea
-                        value={
-                            taskDescription
-                        }
-                        onChange={(
-                            event,
-                        ) =>
-                            setTaskDescription(
-                                event.target
-                                    .value,
+                        rows={4}
+                        value={projectDescription}
+                        onChange={(event) =>
+                            setProjectDescription(
+                                event.target.value,
                             )
                         }
-                        rows={4}
-                        placeholder="Add task details..."
+                        placeholder="Describe this project..."
                         className="mt-2 w-full resize-none rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none placeholder:text-[#a7b3b3] focus:border-[#527273]"
                     />
                 </div>
 
-                {/* STATUS + PRIORITY */}
+                {/* STATUS */}
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div>
+                <div className="mt-5">
+                    <label className="text-xs font-medium text-[#527273]">
+                        Project Status
+                    </label>
+
+                    <select
+                        value={projectStatus}
+                        onChange={(event) =>
+                            setProjectStatus(
+                                event.target
+                                    .value as ProjectStatus,
+                            )
+                        }
+                        className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none focus:border-[#527273]"
+                    >
+                        <option value="active">
+                            Active
+                        </option>
+
+                        <option value="on-hold">
+                            On Hold
+                        </option>
+
+                        <option value="completed">
+                            Completed
+                        </option>
+                    </select>
+                </div>
+
+                {/* PROGRESS */}
+
+                <div className="mt-5">
+                    <div className="flex items-center justify-between">
                         <label className="text-xs font-medium text-[#527273]">
-                            Status
+                            Progress
                         </label>
 
-                        <select
-                            value={
-                                taskStatus
-                            }
-                            onChange={(
-                                event,
-                            ) =>
-                                setTaskStatus(
-                                    event.target
-                                        .value as TaskStatus,
-                                )
-                            }
-                            className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none focus:border-[#527273]"
-                        >
-                            <option value="todo">
-                                To Do
-                            </option>
-
-                            <option value="progress">
-                                In Progress
-                            </option>
-
-                            <option value="done">
-                                Done
-                            </option>
-                        </select>
+                        <span className="text-xs font-semibold text-[#315b5d]">
+                            {projectProgress}%
+                        </span>
                     </div>
 
-                    <div>
-                        <label className="text-xs font-medium text-[#527273]">
-                            Priority
-                        </label>
-
-                        <select
-                            value={
-                                taskPriority
-                            }
-                            onChange={(
-                                event,
-                            ) =>
-                                setTaskPriority(
-                                    event.target
-                                        .value as TaskPriority,
-                                )
-                            }
-                            className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none focus:border-[#527273]"
-                        >
-                            <option value="low">
-                                Low
-                            </option>
-
-                            <option value="medium">
-                                Medium
-                            </option>
-
-                            <option value="high">
-                                High
-                            </option>
-                        </select>
-                    </div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={projectProgress}
+                        onChange={(event) =>
+                            setProjectProgress(
+                                Number(
+                                    event.target.value,
+                                ),
+                            )
+                        }
+                        className="mt-3 w-full accent-[#315b5d]"
+                    />
                 </div>
 
                 {/* DUE DATE */}
 
                 <div className="mt-5">
                     <label className="text-xs font-medium text-[#527273]">
-                        Due date
+                        Due Date
                     </label>
 
                     <input
                         type="date"
-                        value={
-                            taskDueDate
-                        }
-                        onChange={(
-                            event,
-                        ) =>
-                            setTaskDueDate(
-                                event.target
-                                    .value,
+                        value={projectDueDate}
+                        onChange={(event) =>
+                            setProjectDueDate(
+                                event.target.value,
                             )
                         }
                         className="mt-2 w-full rounded-xl border border-[#dce4e2] bg-white px-4 py-3 text-sm text-[#29494a] outline-none focus:border-[#527273]"
@@ -1730,32 +1003,26 @@ function TaskFormModal({
 
                 {/* ACTIONS */}
 
-                <div className="mt-7 flex justify-end gap-3">
+                <div className="mt-8 flex justify-end gap-3">
                     <button
                         type="button"
-                        onClick={
-                            onClose
-                        }
-                        className="rounded-lg px-4 py-2.5 text-sm font-medium text-[#718282] transition hover:bg-[#edf1f0]"
+                        onClick={onClose}
+                        className="rounded-xl px-4 py-2.5 text-sm font-medium text-[#718282] transition hover:bg-[#edf1f0]"
                     >
                         Cancel
                     </button>
 
                     <button
                         type="button"
-                        onClick={
-                            onSave
-                        }
-                        className="rounded-lg bg-[#214f51] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
+                        onClick={onSave}
+                        className="rounded-xl bg-[#214f51] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#183f41]"
                     >
-                        {isEditing
+                        {editingProject
                             ? "Save Changes"
-                            : "Create Task"}
+                            : "Create Project"}
                     </button>
                 </div>
             </div>
         </div>
     );
 }
-
-export default Projects;

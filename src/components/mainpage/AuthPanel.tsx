@@ -41,16 +41,12 @@ export function AuthPanel({
       password: "",
     });
 
-  const [errors, setErrors] =
-    useState<FormErrors>({});
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const navigate = useNavigate();
-  const [successMessage, setSuccessMessage] =
-    useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const handleChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>,) => {
     const { name, value } = event.target;
 
     setFormData((previousData) => ({
