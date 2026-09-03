@@ -452,49 +452,46 @@ function MyTasks() {
        COMPLETE TASK
     ===================================================== */
 
-    function toggleTaskCompletion(
-        taskId: string,
-    ) {
+    function toggleTaskCompletion(taskId: string,) {
         setTasks(
             (previousTasks) => {
-                const updatedTasks =
+                const updatedTasks: Task[] =
                     previousTasks.map(
-                        (task) =>
-                            task.id ===
-                                taskId
-                                ? {
-                                    ...task,
-                                    status:
-                                        task.status ===
-                                            "done"
-                                            ? "todo"
-                                            : "done",
-                                }
-                                : task,
+                        (task): Task => {
+                            if (task.id === taskId) {
+                                const newStatus: TaskStatus =
+                                    task.status === "done" ? "todo" : "done";
+                                return { ...task, status: newStatus, };
+                            }
+                            return task;
+                        },
                     );
-
-                return normalizeTaskOrders(
-                    updatedTasks,
-                );
+                return normalizeTaskOrders(updatedTasks,);
             },
         );
 
         setSelectedTask(
-            (previous) =>
-                previous &&
-                    previous.id === taskId
-                    ? {
-                        ...previous,
-                        status:
-                            previous.status ===
-                                "done"
-                                ? "todo"
-                                : "done",
-                    }
-                    : previous,
+            (previous) => {
+                if (
+                    !previous ||
+                    previous.id !== taskId
+                ) {
+                    return previous;
+                }
+
+                const newStatus: TaskStatus =
+                    previous.status ===
+                        "done"
+                        ? "todo"
+                        : "done";
+
+                return {
+                    ...previous,
+                    status: newStatus,
+                };
+            },
         );
     }
-
     /* =====================================================
        DELETE TASK
     ===================================================== */
@@ -570,7 +567,7 @@ function MyTasks() {
 
         setTasks(
             (previousTasks) => {
-                const updatedTasks =
+                const updatedTasks: Task[] =
                     previousTasks.map(
                         (task) =>
                             task.id ===
@@ -1208,8 +1205,8 @@ function StatCard({
 
                 <div
                     className={`grid h-10 w-10 place-items-center rounded-xl ${danger
-                            ? "bg-[#fde8e4] text-[#c65b50]"
-                            : "bg-[#e6f0ee] text-[#315b5d]"
+                        ? "bg-[#fde8e4] text-[#c65b50]"
+                        : "bg-[#e6f0ee] text-[#315b5d]"
                         }`}
                 >
                     {icon}
@@ -1217,8 +1214,8 @@ function StatCard({
 
                 <p
                     className={`text-2xl font-semibold ${danger
-                            ? "text-[#c65b50]"
-                            : "text-[#29494a]"
+                        ? "text-[#c65b50]"
+                        : "text-[#29494a]"
                         }`}
                 >
                     {value}
@@ -1407,8 +1404,8 @@ function TaskRow({
 
                     <h3
                         className={`text-sm font-medium ${completed
-                                ? "text-[#a2afad] line-through"
-                                : "text-[#29494a]"
+                            ? "text-[#a2afad] line-through"
+                            : "text-[#29494a]"
                             }`}
                     >
                         {task.title}
@@ -1437,7 +1434,7 @@ function TaskRow({
                 <span
                     className={`rounded-md px-2.5 py-1 text-[10px] font-medium capitalize ${priorityStyles[
                         task.priority
-                        ]
+                    ]
                         }`}
                 >
                     {task.priority}
@@ -1445,8 +1442,8 @@ function TaskRow({
 
                 <span
                     className={`text-xs ${overdue
-                            ? "font-medium text-[#c65b50]"
-                            : "text-[#849595]"
+                        ? "font-medium text-[#c65b50]"
+                        : "text-[#849595]"
                         }`}
                 >
                     {task.dueDate ||
